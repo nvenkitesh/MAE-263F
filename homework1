@@ -97,6 +97,7 @@ def explicitEulerStep(x_old, u_old, params):
         
     return x_new, u_new
 
+#test cases implemented
 if __name__ == "__main__":
     params = {
         'm': np.array([0, 1, 2, 3]),
