@@ -1,0 +1,144 @@
+import numpy as np
+
+def gradEs(xa, xb, k):
+    """
+    Gradient of the spring energy.
+    """
+    return k * (xb - xa) * np.array([-1.0, 1.0]) #[cite: 6]
+
+def hessEs(k):
+    """
+    Hessian of the spring energy.
+    """
+    return k * np.array([[1.0, -1.0], [-1.0, 1.0]]) #[cite: 6]
+
+def dampingForce(xa_new, xb_new, xa_old, xb_old, b, dt):
+    """
+    Damper force vector.
+    """
+    ua = (xa_new - xa_old) / dt
+    ub = (xb_new - xb_old) / dt
+    return b * (ub - ua) * np.array([-1.0, 1.0]) #[cite: 6]
+
+def dampingJacobian(b, dt):
+    """
+    Derivative of dampingForce with respect to new positions.
+    """
+    return (b / dt) * np.array([[1.0, -1.0], [-1.0, 1.0]]) #[cite: 6]
+
+def getFJ(x_new, x_old, u_old, params):
+    """
+    Full residual f and Jacobian J built by looping over elements.
+    """
+    m = params['m']
+    k = params['k']
+    b = params['b']
+    g = params['g']
+    dt = params['dt']
+    N = len(m) - 1 #[cite: 5]
+    
+    f = np.zeros(N + 1)
+    J = np.zeros((N + 1, N + 1))
+    
+    # Inertial and external force (gravity) terms for nodes
+    for j in range(1, N + 1):
+        f[j] = (m[j] / dt) * (((x_new[j] - x_old[j]) / dt) - u_old[j]) - m[j] * g #[cite: 4]
+        J[j, j] += m[j] / (dt**2) #[cite: 4]
+        
+    # Element assembly loop over springs and dampers
+    for i in range(1, N + 1):
+        idx = [i - 1, i]
+        
+        # Spring
+        f[idx] += gradEs(x_new[i-1], x_new[i], k[i]) #[cite: 4]
+        J[np.ix_(idx, idx)] += hessEs(k[i]) #[cite: 4]
+        
+        # Damper
+        f[idx] += dampingForce(x_new[i-1], x_new[i], x_old[i-1], x_old[i], b[i], dt) #[cite: 4]
+        J[np.ix_(idx, idx)] += dampingJacobian(b[i], dt) #[cite: 4]
+        
+    return f, J
+
+def implicitEulerStep(x_old, u_old, params):
+    """
+    One implicit Euler step using Newton's method.
+    """
+    N = len(params['m']) - 1
+    dt = params['dt']
+    eps = 1e-12 #[cite: 7]
+    
+    x_new = x_old.copy() #[cite: 5]
+    free = list(range(1, N + 1)) #[cite: 4]
+    
+    err = np.inf
+    while err >= eps:
+        f, J = getFJ(x_new, x_old, u_old, params) #[cite: 5]
+        
+        f_free = f[free]
+        J_free = J[np.ix_(free, free)]
+        
+        # Solve for delta x
+        delta_x_free = np.linalg.solve(J_free, f_free) #[cite: 4]
+        x_new[free] -= delta_x_free #[cite: 4]
+        
+        # Re-evaluate residual to check convergence
+        f_check, _ = getFJ(x_new, x_old, u_old, params)
+        err = np.linalg.norm(f_check[free]) #[cite: 5]
+        
+    u_new = (x_new - x_old) / dt #[cite: 4]
+    return x_new, u_new
+
+def explicitEulerStep(x_old, u_old, params):
+    """
+    One explicit (forward) Euler step.
+    """
+    m = params['m']
+    k = params['k']
+    b = params['b']
+    g = params['g']
+    dt = params['dt']
+    N = len(m) - 1
+    
+    f_int = np.zeros(N + 1)
+    
+    # Loop over elements to accumulate internal forces
+    for i in range(1, N + 1):
+        idx = [i - 1, i]
+        
+        # Spring internal force
+        f_int[idx] += gradEs(x_old[i-1], x_old[i], k[i]) #[cite: 7]
+        
+        # Damper internal force
+        u_a = u_old[i-1]
+        u_b = u_old[i]
+        g_i = b[i] * (u_b - u_a) * np.array([-1.0, 1.0]) #[cite: 7]
+        f_int[idx] += g_i
+        
+    # Calculate accelerations and update states
+    x_new = np.zeros(N + 1)
+    u_new = np.zeros(N + 1)
+    
+    for j in range(1, N + 1):
+        a_j = g - (1.0 / m[j]) * f_int[j] #[cite: 7]
+        
+        x_new[j] = x_old[j] + dt * u_old[j] #[cite: 7]
+        u_new[j] = u_old[j] + dt * a_j #[cite: 7]
+        
+    return x_new, u_new
+
+# Example Run / Test Case 8 (Implicit Euler)
+if __name__ == "__main__":
+    params = {
+        'm': np.array([0, 1, 2, 3]),
+        'k': np.array([0, 10, 20, 30]),
+        'b': np.array([0, 1, 2, 3]),
+        'g': 9.8,
+        'dt': 0.1
+    }
+    
+    x_old = np.array([0, 0.01, 0.03, 0.06])
+    u_old = np.array([0, 0.1, 0.2, 0.3])
+    
+    x_new_imp, u_new_imp = implicitEulerStep(x_old, u_old, params)
+    print("Implicit Euler x_new:", x_new_imp)
+    print("Implicit Euler u_new:", u_new_imp)
