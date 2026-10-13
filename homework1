@@ -102,13 +102,13 @@ def explicitEulerStep(x_old, u_old, params):
 
 if __name__ == "__main__":
     # swapping these to test each case
-    dt = 0.001 # time step
-    total_time = 1.0 
+    dt = 0.1 # time step from prompt
+    total_time = 10.0 # final simulation time
     
     params = {
-        'm': np.array([0, 1]), # mass
-        'k': np.array([0, 0]), # stiffness
-        'b': np.array([0, 0]), # damping
+        'm': np.array([0, 1]), # N=1, mass = 1
+        'k': np.array([0, 1]), # spring stiffness = 1
+        'b': np.array([0, 0]), # no damping (b=0)
         'g': 9.8,
         'dt': dt
     }
@@ -121,8 +121,8 @@ if __name__ == "__main__":
     # time loop
     num_steps = int(total_time / dt)
     for step in range(num_steps):
-        # Swap implicitEulerStep to explicitEulerStep for Part E questions
-        x, u = implicitEulerStep(x, u, params) 
+        
+        x, u = explicitEulerStep(x, u, params) 
         
     print(f"Final x at t={total_time}s:", x)
     print(f"Final u at t={total_time}s:", u)
